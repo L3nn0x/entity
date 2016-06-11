@@ -3,6 +3,9 @@
 #include <unordered_set>
 #include <set>
 #include <memory>
+#include <functional>
+#include <unordered_map>
+#include <exception>
 
 template <class T>
 struct BaseProperty_comp {
@@ -15,7 +18,7 @@ struct BaseProperty_comp {
 		Helper(T *p) : id(p->id) {}
 		template <class U, class... Ts>
 		Helper(std::unique_ptr<U, Ts...> const &up) : id(up->id) {}
-		bool operator<() (Helper o) const {
+		bool operator<(Helper o) const {
 			return std::less<std::string>() (id, o.id);
 		}
 	};
@@ -53,11 +56,14 @@ class Property : public BaseProperty {
 class Entity {
 	public:
 		using Functor = std::function<void(Entity*)>;
-		Entity(Functor registerP) : reg(registerP) {}
+		Entity(const std::string &id, Functor registerP)
+			: id(id), reg(registerP) {}
 
 		template <typename T>
 		void setProperty(const std::string &id, T&& data) {
 			auto res = properties.emplace(id, std::move(data));
+			if (!res.second)
+				return;
 			reg(this);
 		}
 
@@ -65,9 +71,11 @@ class Entity {
 		auto getProperty(const std::string &id) {
 			auto res = properties.find(id);
 			if (res != properties.end())
-				return dynamic_cast<Property<T>*>(res.get());
+				return dynamic_cast<Property<T>*>(res->get());
 			return nullptr;
 		}
+
+		std::string id;
 
 	private:
 		owning_set<BaseProperty> properties;
@@ -86,7 +94,7 @@ class Requirements {
 	public:
 		template <typename T>
 		void requireProperty(const std::string &id) {
-			reqs.emplace_back([id](Entity *e) {
+			reqs.emplace([id](Entity *e) {
 					return e->getProperty<T>(id) != nullptr;
 					});
 		}
@@ -102,3 +110,51 @@ class Requirements {
 		std::unordered_set<Entity::Functor> reqs;
 };
 
+class BaseController {
+	public:
+		BaseController(Entity *e) : entity(e) {}
+		virtual ~BaseController() {}
+
+		virtual void update() = 0;
+
+	protected:
+		Entity *entity;
+};
+
+class System {
+	public:
+		Entity *createEntity(const std::string &id) {
+			auto res = entities.emplace(id,
+					std::bind(&System::updateProperties,
+						this, std::placeholders::_1));
+			return res.first->get();
+		}
+
+		Entity *getEntity(const std::string &id) {
+			auto res = entities.find(id);
+			if (res != entities.end())
+				return res->get();
+			return nullptr;
+		}
+
+		void updateProperties(Entity *e) {
+		}
+
+		template <class T>
+		void registerController() {
+			auto reqs = T::require();
+		}
+
+		void update() {
+		}
+
+	private:
+		using Functor =
+			std::function<std::unique_ptr<BaseController>(Entity*)>;
+		owning_set<Entity> entities;
+		std::unordered_set<std::pair<Requirements, Functor>> controllers;
+};
+
+int main() {
+	return 0;
+}
