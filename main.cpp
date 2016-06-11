@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <set>
 #include <memory>
 
@@ -80,4 +81,24 @@ auto &getProperty(Entity *e, const std::string &id) {
 		throw std::runtime_error("Error property not present");
 	return tmp->value;
 }
+
+class Requirements {
+	public:
+		template <typename T>
+		void requireProperty(const std::string &id) {
+			reqs.emplace_back([id](Entity *e) {
+					return e->getProperty<T>(id) != nullptr;
+					});
+		}
+
+		bool checkProperties(Entity *e) {
+			for (auto &it : reqs)
+				if (!it(e))
+					return false;
+			return true;
+		}
+
+	private:
+		std::unordered_set<Entity::Functor> reqs;
+};
 
