@@ -62,4 +62,22 @@ class Entity {
 
 		template <typename T>
 		auto getProperty(const std::string &id) {
+			auto res = properties.find(id);
+			if (res != properties.end())
+				return dynamic_cast<Property<T>*>(res.get());
+			return nullptr;
+		}
+
+	private:
+		owning_set<BaseProperty> properties;
+		Functor                  reg;
+};
+
+template <typename T>
+auto &getProperty(Entity *e, const std::string &id) {
+	auto *tmp = e->getProperty<T>(id);
+	if (!tmp)
+		throw std::runtime_error("Error property not present");
+	return tmp->value;
+}
 
